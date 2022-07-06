@@ -53,8 +53,13 @@ defmodule Ratio do
 
   Use `Ratio.<|>/2` or `Ratio.new/2` instead.
   """
-  defstruct numerator: 0, denominator: 1
-  @type t :: %Ratio{numerator: integer(), denominator: pos_integer()}
+  defstruct continued_fraction_representation: nil, numerator: 0, denominator: 1
+
+  @type t :: %Ratio{
+          continued_fraction_representation: nil | list(integer()),
+          numerator: integer(),
+          denominator: pos_integer()
+        }
 
   @doc """
   Check to see whether something is a ratioal struct.
@@ -283,7 +288,14 @@ defmodule Ratio do
   -5 <|> 3
   """
   def minus(%Ratio{numerator: numerator, denominator: denominator}) do
-    %Ratio{numerator: Kernel.-(numerator), denominator: denominator}
+    {continued_fraction, _} =
+      get_continued_fraction_representation(Kernel.-(numerator), denominator)
+
+    %Ratio{
+      numerator: Kernel.-(numerator),
+      denominator: denominator,
+      continued_fraction_representation: continued_fraction
+    }
   end
 
   @doc """
@@ -502,14 +514,19 @@ defmodule Ratio do
   defp simplify(rational)
 
   defp simplify(%Ratio{numerator: numerator, denominator: denominator}) do
-    gcdiv = gcd(numerator, denominator)
+    {continued_fraction, gcdiv} = get_continued_fraction_representation(numerator, denominator)
     new_denominator = Kernel.div(denominator, gcdiv)
     {new_denominator, numerator} = normalize_denom_num(new_denominator, numerator)
 
     # if new_denominator == 1 do
     #   Kernel.div(numerator, gcdiv)
     # else
-    %Ratio{numerator: Kernel.div(numerator, gcdiv), denominator: new_denominator}
+    %Ratio{
+      continued_fraction_representation: continued_fraction,
+      numerator: Kernel.div(numerator, gcdiv),
+      denominator: new_denominator
+    }
+
     # end
   end
 
@@ -521,11 +538,23 @@ defmodule Ratio do
     end
   end
 
-  # Calculates the Greatest Common denominator of two numbers.
-  defp gcd(a, 0), do: abs(a)
+  # Returns the continued fraction representation of a rational with 'a' being it's numerator and 'b' being it's denominator, along with Greatest Common Divisor of 'a' and 'b'.
+  def get_continued_fraction_representation(a, b) do
+    sign = sign(a) * sign(b)
+    {continued_fraction, gcdiv} = get_continued_fraction_representation(a, b, 0)
+    {[sign | continued_fraction], gcdiv}
+  end
 
-  defp gcd(0, b), do: abs(b)
-  defp gcd(a, b), do: gcd(b, Kernel.rem(a, b))
+  defp get_continued_fraction_representation(a, 0, _depth), do: {[], abs(a)}
+  defp get_continued_fraction_representation(0, b, _depth), do: {[0], abs(b)}
+
+  defp get_continued_fraction_representation(a, b, depth) do
+    {continued_fraction, gcdiv} =
+      get_continued_fraction_representation(b, Kernel.rem(a, b), depth + 1)
+
+    sign = if rem(depth, 2) == 0, do: 1, else: -1
+    {[sign * Kernel.div(a, b) | continued_fraction], gcdiv}
+  end
 
   @doc """
   Rounds a number (rational, integer or float) to the largest whole number less than or equal to num.
